@@ -1,0 +1,205 @@
+<Oracle Database 구조>
+
+[database]
+1.Datafiles(★)
+ - 실제 Data가 저장된 곳
+ - Data Dictionary가 저장된 곳
+ - Datafile 정보 조회 : v$datafile(v$tempfile), dba_data_files
+
+2.Controlfile(★)
+ - DB의 무결성을 유지/관리할 수 있는 모든 동기화 정보가 기록된 곳
+  (DB의 논리적/물리적인 구조정보, 마지막 작업 번호 등)
+ - DB당 하나 운영하면 됨
+ - 다중화 기능 제공됨(최대 8개까지 다중화 가능, 권장 : 3개)
+  다중화 수↑ = 안정성↑, 성능↓
+  다중화 수↓ = 안정성↓, 성능↑
+ - Controlfile 정보 조회 :  v$controlfile
+
+3. Redologfiles(★)
+ - DB에서 발생된 변경작업의 로그정보(Redo data)가 기록된 곳
+ - 주목적 : Datafile Recovery(복구)
+ - 순환형으로 관리됨
+ - DB당 최소 2개 이상 운영해야함
+   (DB당 Redo log group이 2개 이상 존재해야하며,
+    group에는 최소 1개 이상의 member(file)가 존재해야함)
+    같은 그룹안에 있는 멤버들끼리는 사이즈 같아야함
+ - 다중화 기능 제공됨
+ -Redologfile 정보 조회 : v$log, v$logfile
+
+4. Parameterfile(★)
+ - Instance의 정의정보가 기록된 곳(SGA메모리 할당정보 등)
+ - DB의 여러 설정 정보가 기록된 곳
+ - 위치 : $ORACLE_HOME/dbs
+        (ORACLE_HOME : Oracle Software가 설치된 경로) 
+ - 이름 : spfileSID.ora, initSID.ora
+
+5. Passwordfile(★)
+ - DB를 시작/종료할 수 있게 인증을 해주는 곳
+ - 위치 : $ORACLE_HOME/dbs
+ - 이름 : orapwSID 
+
+6. Archived log files(option)
+ - Redo log file의 Offline 복사본
+ - logswitch 발생 시 생성됨
+ - 주목적 : Datafile Recovery(복구)
+ - DB의 log mode 조회 : v$database, archived log list 명령어
+
+[Instance]
+(SGA) : 공유 가능한 메모리 구조 (모든 유저, 서버, 백그라운드 프로세스가 공유)
+1. Shared Pool(★) => 사전 준비 작업을 하는 메모리 구조
+ 1) Library Cache
+ - 최근에 사용된(실행된) SQL구문과 실행계획이 저장된 곳
+   (쿼리구문의 대소문자, 공백까지 일치해야 hit됨)
+ - LRU 알고리즘으로 관리됨
+ 2) Data Dictionary Cache
+ - 최근에 사용된 DB정보가 저장된 곳
+   (Object 정보, 권한, file, User 정보 등)
+ - LRU 알고리즘으로 관리됨
+
+2. DB Buffer Cache(★) => 실제 작업 공간
+ - 최근에 사용된 Data block이 저장된 곳
+ - LRU 알고리즘으로 관리됨
+
+3. Redo Log Buffer(★)
+ - DB에서 발생된 변경작업의 로그 정보가 기록되는 곳
+ - 순환형으로 관리됨
+
+
+(B/G proc)
+1. PMON-process moniter(★)
+ - 모든 유저/서버/백그라운드 프로세스들을 주시
+ - 유저/서버 프로세스에서 문제가 생겼을때 뒷처리를 해줌->유저가 진행시키고 있던 트랜잭션을 롤백
+ - User Process fail시 트랜잭션 rollback 및 선점하고 있던 자원/Lock을 해제함
+  
+* Instance / BG proc 의 필수요소 중 하나라도 종료되면 DB가 종료됨
+
+2. SMON-system moniter(★)
+ - 인스턴스를 주시
+ - 인스턴스(DB)가 비정상적으로 종료가 됐을때 뒷처리 ㅊ
+ - Instance fail 시(=DB 비정상종료) 다시 DB 재시작할때 자동으로 DB의 동기화를 맞춰줌
+
+3. DBWR-database writer(★)
+ - DB buffer cache의 Dirty block을 Datafile로 기록함
+   체크포인트 발생 시 기록함
+
+4. LGWR-log writer(★)
+ - Redo log buffer의 로그정보(Redo data)를 Redo log file로 기록함
+   커밋(commit) 발생 시 기록함
+
+5. CKPT-check point(★)
+ - 체크포인트 신호가 발생하면 DBWR에게 알려주는 역할
+   DBWR가 기록한 후 Controlfile과 Datafile 헤더에 마지막 체크포인트 번호 갱신함
+
+6. ARC(n)-archiver(option)
+ - DB가 Archive log mode인 경우 활성화됨(Noarchive log mode인 경우 비활성화)
+   Redo log file에 로그스위치 발생 시 Archived log file 생성함.
+
+
+
+<Database 생성 방법>
+1. 자동 : dbca tool 사용
+         12c - resp
+         11g - resp
+2. 수동 : sqlplus tool 사용(create database ...;)
+         11g - prod
+
+
+
+<Oracle Software>
+1. SQL Plus
+-터미널 환경의 Tool
+-쿼리구문 입력/실행/결과 확인
+-DBA(sys, system), 일반 DB User(hr, demo) 
+
+2. SQL Developer
+-그래픽 환경의 Tool
+-쿼리구문 입력/실행/결과 확인
+-일반 DB User(hr, demo)
+
+3. EM
+-웹브라우저 환경의 Tool
+-DB의 전반적인 관리를 도와주는 프로그램
+-DBA(sys, system)
+-주소 : https://localhost:1158/em
+                  ↑        ↑
+               Server의   port#
+             Host명(IP주소)
+-11g 버전의 EM 실행 절차
+ 1) EM 실행 인증 : $] emctl start dbconsole
+ 2) EM 접속 : https://localhost:1158/em
+
+
+
+<Parameter file 유형>
+1. PFILE
+ -위치 : $ORACLE_HOME/dbs
+ -이름 :  initSID.ora
+ -text file : vi 편집기로 수동 편집 가능함
+ -static file : DB 운영 중 parameter값 변경 시 바로 적용 안됨 → 반드시 DB 재시작해야 적용됨
+
+2. SPFILE
+ -위치 : $ORACLE_HOME/dbs
+ -이름 : spfileSID.ora
+ -binary file(=이진정보로 되어있음) :  ORACLE이 유지/관리함, vi 편집기로 수동 편집하면 안됨
+ -dynamic file : DB운영 중 parameter값 변경 시 바로 적용 가능
+ -조회 명령어 : SQL> show parameter db_block_size  ← ; 붙이지 않음
+				  (파라미터명)
+ -변경 명령어 : SQL> alter system set db_cache_size = 512M scope = memory;
+				     (파라미터명)     (변경값)       both(default)
+                                                                spfile
+
+ -scope 옵션 1) memory : 현재 DB에만 적용, spfile에는 적용 안함. → DB 재시작 시 원래값으로 되돌아감.
+	    2) both(default) : 현재 DB에도 적용하고 spfile에도 적용함. → 지금부터 시작해서 DB가 재시작되더라도 계속 적용됨. 
+	    3) spfile : 현재 DB에는 적용하지 않고 spfile에만 적용함 → DB 재시작 시 적용됨(static)
+
+
+<Database 시작>
+
+                               ┌---------------alter database open---------------┐
+                               ┌--alter database mount--┐
+                                                        
+shutdown -----------------> nomount -----------------> mount -----------------> open
+                               ^
+   └------startup nomount------┘                        ^
+   └--------------------startup mount-------------------┘                        ^
+   └-------------------------------------startup---------------------------------┘ 
+
+
+
+
+
+
+<DB의 저장공간 추가>
+1. T/S생성(=Datafile 생성)
+SQL > create tablespace appuser
+      datafile '/u01/app/oracle/oradata/ORCL/datafile/appuser01.dbf'
+      size 30M;
+      autoextend on next 10M maxsize 500M;
+
+2. 기존 T/S에 Datafile 추가
+SQL> alter tablespace appuser
+     add datafile '/u01/app/oracle/oradata/ORCL/datafile/appuser02.dbf'
+     size 20M (unlimited);
+
+3. Datafile 사이즈 늘리기
+SQL> alter database datafile '/u01/app/oracle/oradata/ORCL/datafile/appuser01.dbf'
+     resize 50M;
+
+4. Datafile에 자동확장 기능 설정
+1) Datafile 생성 시
+SQL> create tablespace appuser
+     datafile '/u01/app/oracle/oradata/ORCL/datafile/appuser01.dbf'
+     size 30M;
+     autoextend on next 10M maxsize 500M;
+
+
+2) Datafile 생성 후
+SQL> alter database datafile '/u01/app/oracle/oradata/ORCL/datafile/appuser02.dbf'
+     autoextend on next 20M;
+
+
+
+
+
+
+
